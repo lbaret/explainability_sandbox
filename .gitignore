@@ -1,2 +1,9 @@
 # Data folder
 data
+lightning_logs
+
+# IDLE
+.vscode
+
+# Python environement
+.venv
