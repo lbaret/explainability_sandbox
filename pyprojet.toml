@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "explainability_interpretability_robustness"
+version = "0.1.0"
+description = "Sandbox for explainability/interpretability/robustness technics/methods"
+license = "Proprietary"
+authors = ["Loïc Baret <baret.loic.1@gmail.com>"]
+readme = "README.md"
+keywords = [
+    "explainability", "interpretability", "robustness", "machine learning", "deep learning"
+]
+packages = [
+    { include = "src", from = "." }
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+numpy = "*"
+notebook = "*"
+click = "*"
+torch = "*"
+torchvision = "*"
+scikit-learn = "*"
+matplotlib = "*"
+
+[tool.poetry.dev-dependencies]
+ipykernel = "*"
