@@ -7,3 +7,5 @@ lightning_logs
 
 # Python environement
 .venv
+.ipynb_checkpoints
+__pycache__
