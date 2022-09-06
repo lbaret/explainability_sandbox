@@ -13,7 +13,7 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-pretrain_resnet = 'src.cli:pretrain_resnet'
+finetune_resnet = 'src.cli:pretrain_resnet'
 
 [tool.poetry.dependencies]
 python = "^3.10"

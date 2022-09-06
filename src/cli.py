@@ -19,7 +19,7 @@ from src.models.resnet50 import resnet50
 @click.option('-d', '--data-root-folder', type=str, required=True, help='Root folder to load fruits vegetables 360 dataset')
 @click.option('-c', '--checkpoints-path', type=str, required=True, help='PyTorch Lightning checkpoints path')
 @click.option('-r', '--train-ratio', type=float, default=0.9, help='Train ratio for training set splitting into train/valid sets')
-def pretrain_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: float):
+def finetune_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: float):
     data_root_folder_object = Path(data_root_folder)
     checkpoints_path_object = Path(checkpoints_path)
     
