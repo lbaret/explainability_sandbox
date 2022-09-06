@@ -69,4 +69,4 @@ def finetune_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: f
     trainer.test(lightning_model, dataloaders=test_loader)
 
 if __name__ == '__main__':
-    pretrain_resnet()
+    finetune_resnet()
