@@ -19,7 +19,10 @@ from src.models.resnet50 import resnet50
 @click.option('-d', '--data-root-folder', type=str, required=True, help='Root folder to load fruits vegetables 360 dataset')
 @click.option('-c', '--checkpoints-path', type=str, required=True, help='PyTorch Lightning checkpoints path')
 @click.option('-r', '--train-ratio', type=float, default=0.9, help='Train ratio for training set splitting into train/valid sets')
-def finetune_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: float):
+@click.option('-b', '--batch_size', type=int, default=512, help='Size of batch for model finetuning and testing')
+@click.option('-w', '--num_workers', type=int, default=2, help="Num workers for data loader parallelization handling")
+@click.option('-e', '--epochs', type=int, default=25, help="Number of epochs for training step")
+def finetune_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: float, batch_size: int, num_workers: int, epochs: int):
     data_root_folder_object = Path(data_root_folder)
     checkpoints_path_object = Path(checkpoints_path)
     
@@ -55,12 +58,12 @@ def finetune_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: f
     lightning_model = LightningWrapper(model)
 
     device = 'gpu' if torch.cuda.is_available() else 'cpu'
-    trainer = pl.Trainer(accelerator=device, max_epochs=25, callbacks=[model_checkpoint])
+    trainer = pl.Trainer(accelerator=device, max_epochs=epochs, callbacks=[model_checkpoint])
 
     # Dataloaders
-    train_loader = DataLoader(train_set, batch_size=512, num_workers=2)
-    valid_loader = DataLoader(valid_set, batch_size=512, num_workers=2)
-    test_loader = DataLoader(test_set, batch_size=512, num_workers=2)
+    train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=num_workers)
+    valid_loader = DataLoader(valid_set, batch_size=batch_size, num_workers=num_workers)
+    test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=num_workers)
 
     # Training
     trainer.fit(lightning_model, train_dataloaders=train_loader, val_dataloaders=valid_loader)
