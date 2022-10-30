@@ -9,10 +9,10 @@ import torchvision.transforms as transforms
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader, random_split
 from torchvision.datasets import ImageFolder
-from torchvision.models import ResNet50_Weights
+from torchvision.models import ResNet50_Weights, ResNet18_Weights
 
 from src.models.lightning_wrapper import LightningWrapper
-from src.models.resnet50 import resnet50
+from src.models.resnet import resnet50, resnet18
 
 
 @click.command()
@@ -37,10 +37,10 @@ def finetune_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: f
     train_set, valid_set = random_split(train_set, [train_size, valid_size])
 
     # Loading model
-    model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
+    model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
 
     # Changing classifier output dimension
-    model.fc = nn.Linear(in_features=2048, out_features=131)
+    model.fc = nn.Linear(in_features=512, out_features=131)
 
     # Freeze unsollicited weights
     for name, params in model.named_parameters():

@@ -2,7 +2,7 @@ from typing import Any, Callable, List, Optional, Type, Union
 
 import torch
 import torch.nn as nn
-from torchvision.models import ResNet50_Weights
+from torchvision.models import ResNet50_Weights, ResNet18_Weights
 from torchvision.models._api import WeightsEnum
 from torchvision.models._meta import _IMAGENET_CATEGORIES
 from torchvision.models._utils import _ovewrite_named_param
@@ -308,3 +308,27 @@ def resnet50(*, weights: Optional[ResNet50_Weights] = None, progress: bool = Tru
     weights = ResNet50_Weights.verify(weights)
 
     return _resnet(Bottleneck, [3, 4, 6, 3], weights, progress, **kwargs)
+
+
+def resnet18(*, weights: Optional[ResNet18_Weights] = None, progress: bool = True, **kwargs: Any) -> ResNet:
+    """ResNet-18 from `Deep Residual Learning for Image Recognition <https://arxiv.org/pdf/1512.03385.pdf>`__.
+
+    Args:
+        weights (:class:`~torchvision.models.ResNet18_Weights`, optional): The
+            pretrained weights to use. See
+            :class:`~torchvision.models.ResNet18_Weights` below for
+            more details, and possible values. By default, no pre-trained
+            weights are used.
+        progress (bool, optional): If True, displays a progress bar of the
+            download to stderr. Default is True.
+        **kwargs: parameters passed to the ``torchvision.models.resnet.ResNet``
+            base class. Please refer to the `source code
+            <https://github.com/pytorch/vision/blob/main/torchvision/models/resnet.py>`_
+            for more details about this class.
+
+    .. autoclass:: torchvision.models.ResNet18_Weights
+        :members:
+    """
+    weights = ResNet18_Weights.verify(weights)
+
+    return _resnet(BasicBlock, [2, 2, 2, 2], weights, progress, **kwargs)
