@@ -2,6 +2,7 @@ from typing import Any, Callable, List, Optional, Type, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.models import ResNet50_Weights, ResNet18_Weights
 from torchvision.models._api import WeightsEnum
 from torchvision.models._meta import _IMAGENET_CATEGORIES
@@ -52,7 +53,6 @@ class BasicBlock(nn.Module):
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes)
-        self.relu = nn.ReLU()
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
@@ -63,7 +63,7 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        out = F.relu(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -72,7 +72,7 @@ class BasicBlock(nn.Module):
             identity = self.downsample(x)
 
         out += identity
-        out = self.relu(out)
+        out = F.relu(out)
 
         return out
 
@@ -108,7 +108,6 @@ class Bottleneck(nn.Module):
         self.bn2 = norm_layer(width)
         self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
-        self.relu = nn.ReLU()
         self.downsample = downsample
         self.stride = stride
 
@@ -117,11 +116,11 @@ class Bottleneck(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        out = F.relu(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
-        out = self.relu(out)
+        out = F.relu(out)
 
         out = self.conv3(out)
         out = self.bn3(out)
@@ -130,7 +129,7 @@ class Bottleneck(nn.Module):
             identity = self.downsample(x)
 
         out += identity
-        out = self.relu(out)
+        out = F.relu(out)
 
         return out
 
@@ -168,7 +167,6 @@ class ResNet(nn.Module):
         self.base_width = width_per_group
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
-        self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
@@ -239,7 +237,7 @@ class ResNet(nn.Module):
         # See note [TorchScript super()]
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.relu(x)
+        x = F.relu(x)
         x = self.maxpool(x)
 
         x = self.layer1(x)
