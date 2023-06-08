@@ -1,3 +1,6 @@
+from typing import Tuple
+
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -7,6 +10,9 @@ class ClassicDataset(Dataset):
         super(ClassicDataset, self).__init__()
         self.X = X
         self.y = y
+        
+        self.n_classes = np.unique(y).shape[0]
+        self.n_features = X.shape[1]
     
     def __len__(self) -> int:
         return len(self.X)
