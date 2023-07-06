@@ -33,7 +33,7 @@ class LightningWrapper(pl.LightningModule):
         inputs, targets = train_batch
         outputs = self.wrapped_model(inputs)
         loss = self.loss_function(outputs, targets)
-        self.log('train_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
         self._log_metrics(outputs, targets, 'train')
         
@@ -43,7 +43,7 @@ class LightningWrapper(pl.LightningModule):
         inputs, targets = valid_batch
         outputs = self.wrapped_model(inputs)
         loss = self.loss_function(outputs, targets)
-        self.log('valid_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('valid_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         
         self._log_metrics(outputs, targets, 'valid')
         
@@ -53,7 +53,7 @@ class LightningWrapper(pl.LightningModule):
         inputs, targets = valid_batch
         outputs = self.wrapped_model(inputs)
         loss = self.loss_function(outputs, targets)
-        self.log('test_loss', loss, prog_bar=True, on_step=True, on_epoch=True)
+        self.log('test_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
         self._log_metrics(outputs, targets, 'test')
 
