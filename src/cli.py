@@ -1,22 +1,91 @@
 import random
+import warnings
+from copy import deepcopy
+from functools import partial
 from pathlib import Path
 from tabnanny import check
+from typing import Dict, List, Tuple
 
 import click
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 from pytorch_lightning.callbacks import ModelCheckpoint
+from scipy import stats
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from torch.utils.data import DataLoader, random_split
+from torchmetrics.classification import BinaryAccuracy
 from torchvision.datasets import ImageFolder
 from torchvision.models import ResNet18_Weights, ResNet50_Weights
 
+from src.dataset_handler.classic_dataset import ClassicDataset
 from src.models.lightning_wrapper import LightningWrapper
+from src.models.multi_linear_layers import MultiLinearLayers
 from src.models.resnet import resnet18, resnet50
+
+warnings.simplefilter("ignore")
+
+def preprocess_heart_data(df: pd.DataFrame) -> Tuple[torch.Tensor, torch.Tensor]:
+    def binarize_sex(sex: str) -> int:
+        if sex.lower() == 'f':
+            return 1
+        else:
+            return 0
+
+    def binarize_exercise_angina(exercise_angina: str) -> int:
+        if exercise_angina.lower() == 'y':
+            return 1
+        else:
+            return 0
+    
+    transformers = {
+        'Age': MinMaxScaler(),
+        'RestingBP': MinMaxScaler(),
+        'Cholesterol': MinMaxScaler(),
+        'MaxHR': MinMaxScaler(),
+        'Oldpeak': MinMaxScaler(),
+        'ChestPainType': OneHotEncoder(),
+        'RestingECG': OneHotEncoder(),
+        'ST_Slope': OneHotEncoder(),
+        'Sex': binarize_sex,
+        'ExerciseAngina': binarize_exercise_angina
+    }
+
+    single_values_columns = []
+    multiple_values_columns = []
+    for column_name, preprocessor in transformers.items():
+        if isinstance(preprocessor, MinMaxScaler):
+            df[column_name] = preprocessor.fit_transform(df[column_name].to_numpy().reshape(-1, 1))
+            single_values_columns.append(column_name)
+        elif isinstance(preprocessor, OneHotEncoder):
+            df[column_name] = preprocessor.fit_transform(df[column_name].to_numpy().reshape(-1, 1)).toarray().tolist()
+            multiple_values_columns.append(column_name)
+        else:
+            df[column_name] = df[column_name].apply(lambda val: preprocessor(val))
+            single_values_columns.append(column_name)
+    
+    labels = df['HeartDisease'].to_numpy()
+
+    inputs_rows = []
+    columns_order = []
+    for _, row in df.drop(columns='HeartDisease').iterrows():
+        arr_row = [row[coln] for coln in single_values_columns]
+        [arr_row.extend(row[coln]) for coln in multiple_values_columns]
+
+        columns_order = single_values_columns + multiple_values_columns
+
+        inputs_rows.append(arr_row)
+
+    labels = torch.tensor(labels, dtype=torch.float32).reshape(-1, 1)
+    inputs = torch.tensor(inputs_rows)
+
+    return inputs, labels
 
 
 @click.group()
@@ -24,12 +93,12 @@ def cli():
     pass
 
 @cli.command()
-@click.option('-d', '--data-folder', type=str, required=True, help='Folder where data are located.')
-@click.option('-fn', '--filename', type=str, required=False, default=None, help='CSV filename to split data from.')
-@click.option('--from-csv', is_flag=True, type=bool, help='Data come from CSV file.')
-@click.option('--from-images', is_flag=True, type=bool, help='Data come from images files (jpg, png, etc...).')
-@click.option('-tr', '--train-ratio', type=float, required=False, default=0.8, help='Train set ratio.')
-@click.option('-v', '--valid-ratio', type=float, required=False, default=0.1, help='Valid set ratio.')
+@click.option('-d', '--data-folder', type=str, required=True, help='Folder where data are located')
+@click.option('-fn', '--filename', type=str, required=False, default=None, help='CSV filename to split data from')
+@click.option('--from-csv', is_flag=True, type=bool, help='Data come from CSV file')
+@click.option('--from-images', is_flag=True, type=bool, help='Data come from images files (jpg, png, etc...)')
+@click.option('-tr', '--train-ratio', type=float, required=False, default=0.8, help='Train set rati.')
+@click.option('-v', '--valid-ratio', type=float, required=False, default=0.1, help='Valid set ratio')
 def split_train_valid_test_data(data_folder: str, filename: str, from_csv: bool, from_images: bool,
                                 train_ratio: float, valid_ratio: float) -> None:
     root_data = Path(data_folder)
@@ -54,9 +123,61 @@ def split_train_valid_test_data(data_folder: str, filename: str, from_csv: bool,
     else:
         raise ValueError('Please indicate which data format you want to split (use --from-csv or --from-images argument)')
 
+# TODO : ajouter le chemin pour les checkpoints
 @cli.command()
-def train_model() -> None:
-    pass
+@click.option('-trd', '--train-data-path', type=str, required=True, help='Training data path')
+@click.option('-vd', '--valid-data-path', type=str, required=True, help='Validation data path')
+@click.option('-ted', '--test-data-path', type=str, required=True, help='Testing data path')
+@click.option('-e', '--epochs', type=int, required=False, default=10, help='Epochs number')
+@click.option('-lr', '--learning-rate', type=float, required=False, default=0.001, help='Learning rate')
+# @click.option('-m', '--model-name', type=str, required=True, help='Model name')  # À ajouter
+def train_model_from_heart_data(train_data_path: str, valid_data_path: str, test_data_path: str,
+                                epochs: int, learning_rate: float) -> None:
+    train_data_path = Path(train_data_path)
+    valid_data_path = Path(valid_data_path)
+    test_data_path = Path(test_data_path)
+
+    df_train = pd.read_csv(train_data_path)
+    df_valid = pd.read_csv(valid_data_path)
+    df_test = pd.read_csv(test_data_path)
+
+    X_train, y_train = preprocess_heart_data(df_train)
+    X_valid, y_valid = preprocess_heart_data(df_valid)
+    X_test, y_test = preprocess_heart_data(df_test)
+
+    train_set = ClassicDataset(X_train, y_train)
+    valid_set = ClassicDataset(X_valid, y_valid)
+    test_set = ClassicDataset(X_test, y_test)
+
+    train_loader = DataLoader(train_set, batch_size=8, shuffle=True, num_workers=8)
+    valid_loader = DataLoader(valid_set, batch_size=8, shuffle=False, num_workers=8)
+
+    network = MultiLinearLayers(X_train.shape[1], 1)
+    loss_function = nn.BCEWithLogitsLoss()
+
+    model = LightningWrapper(network, loss_function, metrics={'accuracy': BinaryAccuracy().to('cuda')}, optimizer_params={'lr': learning_rate})
+
+    device = 'gpu' if torch.cuda.is_available() else 'cpu'
+    trainer = pl.Trainer(accelerator=device, max_epochs=epochs)
+
+    # Training / Validating step
+    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=valid_loader)
+
+    # One iteration testing step
+    submodel = deepcopy(model.wrapped_model)
+
+    X_test = []
+    y_test = []
+    for x, y in test_set:
+        X_test.append(x.unsqueeze(0))
+        y_test.append(y)
+
+    X_test = torch.cat(X_test)
+    y_test = torch.cat(y_test)
+
+    outputs = submodel(X_test)
+
+    print('Model test accuracy :', BinaryAccuracy()(outputs, y_test.unsqueeze(1)))
 
 @cli.command()
 @click.option('-d', '--data-root-folder', type=str, required=True, help='Root folder to load fruits vegetables 360 dataset')
