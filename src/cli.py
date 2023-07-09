@@ -13,13 +13,13 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.classification import BinaryAccuracy
 from torchvision.datasets import ImageFolder
-from torchvision.models import ResNet18_Weights
+from torchvision.models import ResNet18_Weights, ResNet50_Weights
 
 from src.dataset_handler.classic_dataset import ClassicDataset
 from src.examples.utils_heart import preprocess_heart_data
 from src.models.lightning_wrapper import LightningWrapper
 from src.models.multi_linear_layers import MultiLinearLayers
-from src.models.resnet import resnet18
+from src.models.resnet import resnet18, resnet50
 
 
 @click.group()
@@ -103,28 +103,51 @@ def train_model_from_heart_data(train_data_path: str, valid_data_path: str, test
     trainer.test(model, dataloaders=test_loader)
 
 @cli.command()
-@click.option('-d', '--data-root-folder', type=str, required=True, help='Root folder to load fruits vegetables 360 dataset')
+@click.option('-d', '--data-root-folder', type=str, required=True, help='Root folder to load dataset')
+@click.option('-trfn', '--train-folder-name', type=str, required=False, default='train', help='Training data folder name')
+@click.option('-tefn', '--test-folder-name', type=str, required=False, default='test', help='Testing data folder name')
+@click.option('-vfn', '--valid-folder-name', type=str, required=False, default='val', help='Validation folder name')
 @click.option('-c', '--checkpoints-path', type=str, required=True, help='PyTorch Lightning checkpoints path')
 @click.option('-r', '--train-ratio', type=float, default=0.9, help='Train ratio for training set splitting into train/valid sets')
 @click.option('-b', '--batch_size', type=int, default=512, help='Size of batch for model finetuning and testing')
 @click.option('-w', '--num_workers', type=int, default=2, help="Num workers for data loader parallelization handling")
 @click.option('-e', '--epochs', type=int, default=25, help="Number of epochs for training step")
-def finetune_resnet(data_root_folder: str, checkpoints_path: str, train_ratio: float, batch_size: int, num_workers: int, epochs: int) -> None:
+@click.option('--use-resnet50', type=bool, is_flag=True, help="Use ResNet50 instead of ResNet18")
+@click.option('--has-valid-set', type=bool, is_flag=True, help="Indicate if data are already splitted in train/val/test")
+def finetune_resnet(data_root_folder: str, train_folder_name: str, test_folder_name: str, valid_folder_name: str, 
+                    checkpoints_path: str, train_ratio: float, batch_size: int, num_workers: int,
+                    epochs: int, use_resnet50: bool, has_valid_set: bool) -> None:
+    images_transform = transforms.Compose(
+        [
+            transforms.Resize(224),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                (0.485, 0.456, 0.406),
+                (0.229, 0.224, 0.225)
+            ),
+        ]
+    )
     data_root_folder_object = Path(data_root_folder)
     checkpoints_path_object = Path(checkpoints_path)
     
-    train_set = ImageFolder(data_root_folder_object.joinpath('Training'), transform=transforms.ToTensor())
-    test_set = ImageFolder(data_root_folder_object.joinpath('Test'), transform=transforms.ToTensor())
+    train_set = ImageFolder(data_root_folder_object.joinpath(train_folder_name), transform=images_transform)
+    test_set = ImageFolder(data_root_folder_object.joinpath(test_folder_name), transform=images_transform)
 
     # Split training set
-    total_size = len(train_set)
-    train_size = int(train_ratio * total_size)
-    valid_size = total_size - train_size
+    if has_valid_set:
+        valid_set = ImageFolder(data_root_folder_object.joinpath(valid_folder_name), transform=images_transform)
+    else:
+        total_size = len(train_set)
+        train_size = int(train_ratio * total_size)
+        valid_size = total_size - train_size
 
     train_set, valid_set = random_split(train_set, [train_size, valid_size])
 
     # Loading model
-    model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+    if use_resnet50:
+        model = resnet50(weights=None)
+    else:
+        model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
 
     # Changing classifier output dimension
     model.fc = nn.Linear(in_features=512, out_features=131)
