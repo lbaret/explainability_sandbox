@@ -64,9 +64,10 @@ def split_train_valid_test_data(data_folder: str, filename: str, from_csv: bool,
 @click.option('-ted', '--test-data-path', type=str, required=True, help='Testing data path')
 @click.option('-e', '--epochs', type=int, required=False, default=10, help='Epochs number')
 @click.option('-lr', '--learning-rate', type=float, required=False, default=0.001, help='Learning rate')
+@click.option('-cp', '--checkpoints-path', type=str, required=False, default='./', help='PyTorch Lightning saving checkpoints folder location')
 # @click.option('-m', '--model-name', type=str, required=True, help='Model name')  # À ajouter
 def train_model_from_heart_data(train_data_path: str, valid_data_path: str, test_data_path: str,
-                                epochs: int, learning_rate: float) -> None:
+                                epochs: int, learning_rate: float, checkpoints_path: str) -> None:
     train_data_path = Path(train_data_path)
     valid_data_path = Path(valid_data_path)
     test_data_path = Path(test_data_path)
@@ -85,6 +86,7 @@ def train_model_from_heart_data(train_data_path: str, valid_data_path: str, test
 
     train_loader = DataLoader(train_set, batch_size=8, shuffle=True, num_workers=8)
     valid_loader = DataLoader(valid_set, batch_size=8, shuffle=False, num_workers=8)
+    test_loader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=8)
 
     network = MultiLinearLayers(X_train.shape[1], 1)
     loss_function = nn.BCEWithLogitsLoss()
@@ -92,26 +94,13 @@ def train_model_from_heart_data(train_data_path: str, valid_data_path: str, test
     model = LightningWrapper(network, loss_function, metrics={'accuracy': BinaryAccuracy().to('cuda')}, optimizer_params={'lr': learning_rate})
 
     device = 'gpu' if torch.cuda.is_available() else 'cpu'
-    trainer = pl.Trainer(accelerator=device, max_epochs=epochs)
+    trainer = pl.Trainer(accelerator=device, max_epochs=epochs, default_root_dir=checkpoints_path)
 
     # Training / Validating step
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=valid_loader)
 
     # One iteration testing step
-    submodel = deepcopy(model.wrapped_model)
-
-    X_test = []
-    y_test = []
-    for x, y in test_set:
-        X_test.append(x.unsqueeze(0))
-        y_test.append(y)
-
-    X_test = torch.cat(X_test)
-    y_test = torch.cat(y_test)
-
-    outputs = submodel(X_test)
-
-    print('Model test accuracy :', BinaryAccuracy()(outputs, y_test.unsqueeze(1)))
+    trainer.test(model, dataloaders=test_loader)
 
 @cli.command()
 @click.option('-d', '--data-root-folder', type=str, required=True, help='Root folder to load fruits vegetables 360 dataset')
