@@ -13,13 +13,13 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.classification import BinaryAccuracy
 from torchvision.datasets import ImageFolder
-from torchvision.models import ResNet18_Weights, ResNet50_Weights
+from torchvision.models.resnet import Wide_ResNet50_2_Weights, wide_resnet50_2
 
 from src.dataset_handler.classic_dataset import ClassicDataset
 from src.examples.utils_heart import preprocess_heart_data
 from src.models.lightning_wrapper import LightningWrapper
 from src.models.multi_linear_layers import MultiLinearLayers
-from src.models.resnet import resnet18, resnet50
+from src.models.resnet import ResNet18_Weights, resnet18
 
 
 @click.group()
@@ -108,18 +108,23 @@ def train_model_from_heart_data(train_data_path: str, valid_data_path: str, test
 @click.option('-tefn', '--test-folder-name', type=str, required=False, default='test', help='Testing data folder name')
 @click.option('-vfn', '--valid-folder-name', type=str, required=False, default='val', help='Validation folder name')
 @click.option('-c', '--checkpoints-path', type=str, required=True, help='PyTorch Lightning checkpoints path')
-@click.option('-r', '--train-ratio', type=float, default=0.9, help='Train ratio for training set splitting into train/valid sets')
+@click.option('-tr', '--train-ratio', type=float, default=0.9, help='Train ratio for training set splitting into train/valid sets')
+@click.option('-vr', '--valid-ratio', type=float, default=0.5, help='Valid ratio for validation set splitting into valid/test sets')
 @click.option('-b', '--batch_size', type=int, default=512, help='Size of batch for model finetuning and testing')
 @click.option('-w', '--num_workers', type=int, default=2, help="Num workers for data loader parallelization handling")
 @click.option('-e', '--epochs', type=int, default=25, help="Number of epochs for training step")
 @click.option('--use-resnet50', type=bool, is_flag=True, help="Use ResNet50 instead of ResNet18")
 @click.option('--has-valid-set', type=bool, is_flag=True, help="Indicate if data are already splitted in train/val/test")
+@click.option('--split-test-from-valid', type=bool, is_flag=True, help='Indicate if we need to use validation set to build the test one')
+@click.option('-nc', '--num-classes', type=int, required=False, default=1000, help='Number of data classes')
+@click.option('--freeze-model', type=bool, is_flag=True, help='If you want to properly finetune the model')
 def finetune_resnet(data_root_folder: str, train_folder_name: str, test_folder_name: str, valid_folder_name: str, 
-                    checkpoints_path: str, train_ratio: float, batch_size: int, num_workers: int,
-                    epochs: int, use_resnet50: bool, has_valid_set: bool) -> None:
+                    checkpoints_path: str, train_ratio: float, valid_ratio: float, batch_size: int, num_workers: int,
+                    epochs: int, use_resnet50: bool, has_valid_set: bool, split_test_from_valid: bool,
+                    num_classes: int, freeze_model: bool) -> None:
     images_transform = transforms.Compose(
         [
-            transforms.Resize(224),
+            transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(
                 (0.485, 0.456, 0.406),
@@ -131,7 +136,6 @@ def finetune_resnet(data_root_folder: str, train_folder_name: str, test_folder_n
     checkpoints_path_object = Path(checkpoints_path)
     
     train_set = ImageFolder(data_root_folder_object.joinpath(train_folder_name), transform=images_transform)
-    test_set = ImageFolder(data_root_folder_object.joinpath(test_folder_name), transform=images_transform)
 
     # Split training set
     if has_valid_set:
@@ -141,22 +145,27 @@ def finetune_resnet(data_root_folder: str, train_folder_name: str, test_folder_n
         train_size = int(train_ratio * total_size)
         valid_size = total_size - train_size
 
-    train_set, valid_set = random_split(train_set, [train_size, valid_size])
+        train_set, valid_set = random_split(train_set, [train_size, valid_size])
+    
+    if split_test_from_valid:
+        total_size = len(valid_set)
+        valid_size = int(valid_ratio * total_size)
+        test_size = total_size - valid_size
+
+        valid_set, test_set = random_split(valid_set, [valid_size, test_size])
 
     # Loading model
     if use_resnet50:
-        model = resnet50(weights=None)
+        model = wide_resnet50_2(weights=Wide_ResNet50_2_Weights.IMAGENET1K_V2, num_classes=num_classes)
     else:
-        model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-
-    # Changing classifier output dimension
-    model.fc = nn.Linear(in_features=512, out_features=131)
+        model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1, num_classes=num_classes)
 
     # Freeze unsollicited weights
-    for name, params in model.named_parameters():
-        if 'fc' in name:
-            continue
-        params.requires_grad = False
+    if freeze_model:
+        for name, params in model.named_parameters():
+            if 'fc' in name:
+                continue
+            params.requires_grad = False
 
     model_checkpoint = ModelCheckpoint(
         dirpath=checkpoints_path_object,
